@@ -1,0 +1,24 @@
+[
+  {
+    "timestamp": "2026-02-03T17:29:17.453543",
+    "conversation_id": "demo1",
+    "is_scam": true,
+    "persona": "62 year old confused man",
+    "reply": "I opened the link sir but it is asking many details. What to enter?",
+    "engagement_metrics": {
+      "turns": 3,
+      "response_time_sec": 1.533
+    },
+    "extracted_intelligence": {
+      "upi_ids": [],
+      "phishing_links": [
+        "http://fakebank.com"
+      ],
+      "bank_accounts": [],
+      "tactics": [
+        "Phishing link"
+      ]
+    },
+    "confidence": 0.7
+  }
+]

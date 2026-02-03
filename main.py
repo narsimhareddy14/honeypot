@@ -2,18 +2,43 @@ from fastapi import FastAPI, Header, HTTPException
 import re
 import time
 import random
+import json
+from datetime import datetime
+import os
 
 app = FastAPI()
 API_KEY = "mysecretkey"
 
-# -------- MEMORY STORE (per conversation) --------
+os.makedirs("logs", exist_ok=True)
+
 MEMORY = {}
 
-# -------- PERSONA --------
-PERSONA = {
-    "age": 62,
-    "style": "confused, polite, slow with technology"
-}
+# -------- PERSONA SELECTION --------
+def choose_persona(msg: str):
+    text = msg.lower()
+
+    if "job" in text:
+        return {"age": 21, "role": "confused student"}
+    if "parcel" in text or "courier" in text:
+        return {"age": 38, "role": "housewife"}
+    if "investment" in text:
+        return {"age": 30, "role": "IT employee"}
+
+    return {"age": 62, "role": "confused old man"}
+
+# -------- SAVE CONVERSATION --------
+def save_conversation(conversation_id, data):
+    filename = f"logs/{conversation_id}.json"
+    try:
+        with open(filename, "r") as f:
+            old = json.load(f)
+    except:
+        old = []
+
+    old.append(data)
+
+    with open(filename, "w") as f:
+        json.dump(old, f, indent=2)
 
 # -------- SCAM DETECTION --------
 def detect_scam(msg: str):
@@ -50,29 +75,26 @@ def detect_tactics(msg: str):
     return tactics
 
 # -------- SMART PERSONA REPLY --------
-def persona_reply(cid, msg):
+def persona_reply(cid, msg, persona):
     time.sleep(random.uniform(1.5, 3.5))
 
     history = MEMORY.get(cid, [])
-
     text = msg.lower()
 
-    # Lead scammer to reveal more info
     if "upi" in text:
-        return "Sir, which app should I open to send money? Can you send UPI again?"
+        return f"Sir, which app should I open to send money? Can you send UPI again? I am {persona['age']} years old."
 
     if "link" in text or "http" in text:
-        return "I opened the link sir but it is asking many details. What to enter?"
+        return f"I opened the link but it is asking many details. What to enter? I am {persona['role']}."
 
     if "otp" in text:
-        return "I received some number sir. Where should I type this OTP?"
+        return "I received some number. Where should I type this OTP?"
 
-    # Generic confusion replies
     replies = [
-        "Sir, I am 62 years old. I don't understand these bank things.",
-        "One minute sir, network is slow. I am checking.",
+        f"Sir, I am {persona['age']} years old {persona['role']}. I don't understand these bank things.",
+        "One minute, network is slow. I am checking.",
         "Can you explain again? I am confused.",
-        "I will try sir, but I don't know where to click."
+        "I will try, but I don't know where to click."
     ]
 
     return replies[len(history) % len(replies)]
@@ -90,22 +112,23 @@ def honeypot(data: dict, x_api_key: str = Header(None)):
     message = data.get("message", "")
     history = data.get("history", [])
 
-    # Update memory
     MEMORY.setdefault(conversation_id, []).append(message)
 
-    is_scam, confidence = detect_scam(message)
+    persona = choose_persona(message)
 
-    reply = persona_reply(conversation_id, message) if is_scam else "Hello, how can I help you?"
+    is_scam, confidence = detect_scam(message)
+    reply = persona_reply(conversation_id, message, persona) if is_scam else "Hello, how can I help you?"
 
     extracted = extract_info(message)
     tactics = detect_tactics(message)
 
     duration = round(time.time() - start_time, 3)
 
-    return {
+    response = {
+        "timestamp": datetime.utcnow().isoformat(),
         "conversation_id": conversation_id,
         "is_scam": is_scam,
-        "persona": f"{PERSONA['age']} year old confused man",
+        "persona": f"{persona['age']} year old {persona['role']}",
         "reply": reply,
         "engagement_metrics": {
             "turns": len(history) + 1,
@@ -117,3 +140,7 @@ def honeypot(data: dict, x_api_key: str = Header(None)):
         },
         "confidence": confidence
     }
+
+    save_conversation(conversation_id, response)
+
+    return response
