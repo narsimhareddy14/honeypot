@@ -5,7 +5,7 @@ import os
 
 app = FastAPI()
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = "mysecretkey"
 
 # ---------- ROOT (tester needs this) ----------
 @app.get("/")
