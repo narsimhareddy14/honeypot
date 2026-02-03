@@ -7,10 +7,11 @@ from datetime import datetime
 import os
 
 app = FastAPI()
-API_KEY = "mysecretkey"
+
+# -------- API KEY FROM ENV --------
+API_KEY = os.getenv("API_KEY")
 
 os.makedirs("logs", exist_ok=True)
-
 MEMORY = {}
 
 # -------- PERSONA SELECTION --------
@@ -103,7 +104,7 @@ def persona_reply(cid, msg, persona):
 @app.post("/honeypot")
 def honeypot(data: dict, x_api_key: str = Header(None)):
 
-    if x_api_key != API_KEY:
+    if API_KEY is None or x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     start_time = time.time()
