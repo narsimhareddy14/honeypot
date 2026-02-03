@@ -111,6 +111,13 @@ def honeypot(data: dict, x_api_key: str = Header(None)):
 
     # --- Flexible input handling for Endpoint Tester ---
     message = data.get("message") or data.get("text") or ""
+    if not message:
+    return {
+        "status": "alive",
+        "message": "Honeypot API reachable",
+        "is_scam": False
+    }
+
     conversation_id = data.get("conversation_id") or "auto_" + str(int(time.time()))
     history = data.get("history") or []
 
