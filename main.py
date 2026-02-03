@@ -109,9 +109,10 @@ def honeypot(data: dict, x_api_key: str = Header(None)):
 
     start_time = time.time()
 
-    conversation_id = data.get("conversation_id", "unknown")
-    message = data.get("message", "")
-    history = data.get("history", [])
+    # --- Flexible input handling for Endpoint Tester ---
+    message = data.get("message") or data.get("text") or ""
+    conversation_id = data.get("conversation_id") or "auto_" + str(int(time.time()))
+    history = data.get("history") or []
 
     MEMORY.setdefault(conversation_id, []).append(message)
 
