@@ -71,7 +71,14 @@ def honeypot(data: dict = None, x_api_key: str = Header(None)):
 
     session_id = data.get("sessionId")
     message_obj = data.get("message", {})
-    text = message_obj.get("text", "")
+
+    text = (
+        message_obj.get("text")
+        or message_obj.get("content")
+        or message_obj.get("body")
+        or ""
+)
+
 
     if not session_id or not text:
         return {"status": "success", "reply": "Hello?"}
