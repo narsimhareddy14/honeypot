@@ -1,11 +1,15 @@
 from fastapi import FastAPI, Header, HTTPException
+import requests
 import re
 import time
 
 app = FastAPI()
 API_KEY = "mysecretkey"
 
-# ---------------- Tester required routes ----------------
+# -------- Memory for sessions --------
+SESSIONS = {}
+
+# -------- Root for tester --------
 @app.get("/")
 def root():
     return {"status": "alive"}
@@ -14,14 +18,12 @@ def root():
 def honeypot_get():
     return {"status": "ready"}
 
-# ---------------- Scam Detection ----------------
-def detect_scam(msg: str):
-    keywords = ["bank", "upi", "otp", "link", "urgent", "account", "verify", "pay"]
-    score = sum(word in msg.lower() for word in keywords)
-    confidence = min(0.5 + 0.1 * score, 0.99)
-    return score >= 2, round(confidence, 2)
+# -------- Scam detection --------
+def is_scam(text: str):
+    keywords = ["bank", "otp", "upi", "verify", "urgent", "account", "link", "pay"]
+    return any(k in text.lower() for k in keywords)
 
-# ---------------- Intelligence Extraction ----------------
+# -------- Intelligence extraction --------
 def extract_info(text: str):
     return {
         "upi_ids": re.findall(r'\b[\w\.-]+@[\w\.-]+\b', text),
@@ -29,48 +31,66 @@ def extract_info(text: str):
         "bank_accounts": re.findall(r'\b\d{9,18}\b', text),
     }
 
-# ---------------- Persona Reply ----------------
-def persona_reply(msg: str):
-    text = msg.lower()
-
-    if "otp" in text:
-        return "I received a number. Where should I enter this OTP?"
-    if "link" in text:
+# -------- Persona reply --------
+def persona_reply(text: str):
+    t = text.lower()
+    if "otp" in t:
+        return "I got some number. Where should I enter this OTP?"
+    if "link" in t:
         return "I opened the link. What details should I fill?"
-    if "upi" in text:
-        return "Which app should I use to send money? I am confused."
-    if "bank" in text:
-        return "My bank app is slow. Please explain again."
+    if "upi" in t or "pay" in t:
+        return "Which app should I use to send money? Please guide me."
+    return "Why is my account being suspended?"
 
-    return "Please explain again, I am confused."
+# -------- GUVI callback --------
+def send_to_guvi(session_id, info):
+    try:
+        requests.post(
+            "https://hackathon.guvi.in/api/updateHoneyPotFinalResult",
+            json={
+                "sessionId": session_id,
+                "upi_ids": info["upi_ids"],
+                "phishing_links": info["phishing_links"],
+                "bank_accounts": info["bank_accounts"]
+            },
+            timeout=3
+        )
+    except:
+        pass  # do not break API if callback fails
 
-# ---------------- Honeypot POST ----------------
+# -------- Main Honeypot --------
 @app.post("/honeypot")
-def honeypot_post(data=None, x_api_key: str = Header(None)):
+def honeypot(data: dict = None, x_api_key: str = Header(None)):
 
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # ---- tester-safe body handling ----
+    # Safety for tester
     if not isinstance(data, dict):
-        return {"status": "ok", "message": "Honeypot reachable"}
+        return {"status": "success", "reply": "Hello?"}
 
-    message = data.get("message")
-    if not message:
-        return {"status": "ok", "message": "Honeypot reachable"}
+    session_id = data.get("sessionId")
+    message_obj = data.get("message", {})
+    text = message_obj.get("text", "")
 
-    start = time.time()
+    if not session_id or not text:
+        return {"status": "success", "reply": "Hello?"}
 
-    is_scam, confidence = detect_scam(message)
-    reply = persona_reply(message)
-    extracted = extract_info(message)
+    # Maintain session history
+    SESSIONS.setdefault(session_id, []).append(text)
 
+    # Detect scam & extract info
+    scam = is_scam(text)
+    info = extract_info(text)
+
+    # If intelligence found, send to GUVI
+    if scam and (info["upi_ids"] or info["phishing_links"] or info["bank_accounts"]):
+        send_to_guvi(session_id, info)
+
+    reply = persona_reply(text)
+
+    # EXACT expected response format
     return {
-    "is_scam": is_scam,
-    "reply": reply,
-    "extracted_intelligence": {
-        "upi_ids": extracted["upi_ids"],
-        "phishing_links": extracted["phishing_links"],
-        "bank_accounts": extracted["bank_accounts"]
+        "status": "success",
+        "reply": reply
     }
-}
