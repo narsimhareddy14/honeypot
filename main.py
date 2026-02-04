@@ -66,11 +66,11 @@ def honeypot_post(data=None, x_api_key: str = Header(None)):
     extracted = extract_info(message)
 
     return {
-        "is_scam": is_scam,
-        "reply": reply,
-        "extracted_intelligence": extracted,
-        "confidence": confidence,
-        "engagement_metrics": {
-            "response_time_sec": round(time.time() - start, 2)
-        }
+    "is_scam": is_scam,
+    "reply": reply,
+    "extracted_intelligence": {
+        "upi_ids": extracted["upi_ids"],
+        "phishing_links": extracted["phishing_links"],
+        "bank_accounts": extracted["bank_accounts"]
     }
+}
