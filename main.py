@@ -46,17 +46,16 @@ def persona_reply(msg: str):
 
 # ---------------- Honeypot POST ----------------
 @app.post("/honeypot")
-def honeypot_post(data: dict = None, x_api_key: str = Header(None)):
+def honeypot_post(data=None, x_api_key: str = Header(None)):
 
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Handle tester empty or weird body safely
+    # ---- tester-safe body handling ----
     if not isinstance(data, dict):
         return {"status": "ok", "message": "Honeypot reachable"}
 
-    message = data.get("message", "")
-
+    message = data.get("message")
     if not message:
         return {"status": "ok", "message": "Honeypot reachable"}
 
