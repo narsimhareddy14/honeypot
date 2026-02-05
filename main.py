@@ -1,15 +1,24 @@
 from fastapi import FastAPI, Header, HTTPException
-import requests
+from pydantic import BaseModel
 import re
-import time
+import requests
 
 app = FastAPI()
 API_KEY = "mysecretkey"
 
-# -------- Memory for sessions --------
-SESSIONS = {}
+# ---------- Models ----------
+class Message(BaseModel):
+    sender: str
+    text: str
+    timestamp: int
 
-# -------- Root for tester --------
+class HoneypotRequest(BaseModel):
+    sessionId: str
+    message: Message
+    conversationHistory: list
+    metadata: dict
+
+# ---------- Routes for tester ----------
 @app.get("/")
 def root():
     return {"status": "alive"}
@@ -18,12 +27,7 @@ def root():
 def honeypot_get():
     return {"status": "ready"}
 
-# -------- Scam detection --------
-def is_scam(text: str):
-    keywords = ["bank", "otp", "upi", "verify", "urgent", "account", "link", "pay"]
-    return any(k in text.lower() for k in keywords)
-
-# -------- Intelligence extraction --------
+# ---------- Helpers ----------
 def extract_info(text: str):
     return {
         "upi_ids": re.findall(r'\b[\w\.-]+@[\w\.-]+\b', text),
@@ -31,7 +35,6 @@ def extract_info(text: str):
         "bank_accounts": re.findall(r'\b\d{9,18}\b', text),
     }
 
-# -------- Persona reply --------
 def persona_reply(text: str):
     t = text.lower()
     if "otp" in t:
@@ -42,63 +45,35 @@ def persona_reply(text: str):
         return "Which app should I use to send money? Please guide me."
     return "Why is my account being suspended?"
 
-# -------- GUVI callback --------
 def send_to_guvi(session_id, info):
     try:
         requests.post(
             "https://hackathon.guvi.in/api/updateHoneyPotFinalResult",
             json={
                 "sessionId": session_id,
-                "upi_ids": info["upi_ids"],
-                "phishing_links": info["phishing_links"],
-                "bank_accounts": info["bank_accounts"]
+                **info
             },
             timeout=3
         )
     except:
-        pass  # do not break API if callback fails
+        pass
 
-# -------- Main Honeypot --------
+# ---------- Main Honeypot ----------
 @app.post("/honeypot")
-def honeypot(data: dict = None, x_api_key: str = Header(None)):
+def honeypot(req: HoneypotRequest, x_api_key: str = Header(None)):
 
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Safety for tester
-    if not isinstance(data, dict):
-        return {"status": "success", "reply": "Hello?"}
-
-    session_id = data.get("sessionId")
-    message_obj = data.get("message", {})
-
-    text = (
-        message_obj.get("text")
-        or message_obj.get("content")
-        or message_obj.get("body")
-        or ""
-)
-
-
-    if not session_id or not text:
-        return {"status": "success", "reply": "Hello?"}
-
-    # Maintain session history
-    SESSIONS.setdefault(session_id, []).append(text)
-
-    # Detect scam & extract info
-    scam = is_scam(text)
+    text = req.message.text
     info = extract_info(text)
 
-    # If intelligence found, send to GUVI
-    if scam and (info["upi_ids"] or info["phishing_links"] or info["bank_accounts"]):
-        send_to_guvi(session_id, info)
+    if any(info.values()):
+        send_to_guvi(req.sessionId, info)
 
     reply = persona_reply(text)
 
-    # EXACT expected response format
     return {
         "status": "success",
         "reply": reply
     }
-
